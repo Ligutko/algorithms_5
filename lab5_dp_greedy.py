@@ -53,15 +53,13 @@ def build_result(length: int, max_profit: int, first) -> Dict:
             "number_of_cuts": len(cuts) - 1}
 
 
-def rod_cutting_memo(length: int, prices: List[int], min_piece: int = MIN_PIECE,
-                     stats: Optional[Dict] = None) -> Dict:
+def rod_cutting_memo(length: int, prices: List[int],
+                     min_piece: int = MIN_PIECE) -> Dict:
     validate_rod(length, prices, min_piece)
     memo = {0: 0}
     first = {}
 
     def solve(n: int) -> Optional[int]:
-        if stats is not None:
-            stats["calls"] += 1
         if n in memo:
             return memo[n]
         best = None
@@ -79,8 +77,8 @@ def rod_cutting_memo(length: int, prices: List[int], min_piece: int = MIN_PIECE,
     return build_result(length, max_profit, first)
 
 
-def rod_cutting_table(length: int, prices: List[int], min_piece: int = MIN_PIECE,
-                      stats: Optional[Dict] = None) -> Dict:
+def rod_cutting_table(length: int, prices: List[int],
+                      min_piece: int = MIN_PIECE) -> Dict:
     validate_rod(length, prices, min_piece)
     best = [None] * (length + 1)
     best[0] = 0
@@ -93,19 +91,16 @@ def rod_cutting_table(length: int, prices: List[int], min_piece: int = MIN_PIECE
             profit = prices[i - 1] + rest
             if best[n] is None or profit > best[n]:
                 best[n], first[n] = profit, i
-    if stats is not None:
-        stats["best"], stats["first"] = best, first
     return build_result(length, best[length], first)
 
 
-def rod_cutting_naive(n: int, prices: List[int], stats: Dict) -> Optional[int]:
-    """Та сама рекурсія без запам'ятовування; лічильник викликів у stats."""
-    stats["calls"] += 1
+def rod_cutting_naive(n: int, prices: List[int]) -> Optional[int]:
+    """Та сама рекурсія без запам'ятовування."""
     if n == 0:
         return 0
     best = None
     for i in range(MIN_PIECE, n + 1):
-        rest = rod_cutting_naive(n - i, prices, stats)
+        rest = rod_cutting_naive(n - i, prices)
         if rest is not None and (best is None or prices[i - 1] + rest > best):
             best = prices[i - 1] + rest
     return best
@@ -158,10 +153,43 @@ def run_tests() -> None:
         print("\nПеревірка пройшла успішно!")
 
 
+def trace_locals(fn, names, *args):
+    """Виконує fn(*args); повертає результат і значення локальних змінних
+    names функції fn у момент повернення з неї."""
+    zniaty = {}
+
+    def profile(frame, event, arg):
+        if event == "return" and frame.f_code is fn.__code__:
+            zniaty.update({k: frame.f_locals[k] for k in names})
+
+    sys.setprofile(profile)
+    try:
+        result = fn(*args)
+    finally:
+        sys.setprofile(None)
+    return result, zniaty
+
+
+def count_calls(fn, code_name, *args):
+    """Виконує fn(*args); повертає результат і кількість викликів функцій
+    з іменем code_name (у тому числі вкладених)."""
+    lichylnyk = [0]
+
+    def profile(frame, event, arg):
+        if event == "call" and frame.f_code.co_name == code_name:
+            lichylnyk[0] += 1
+
+    sys.setprofile(profile)
+    try:
+        result = fn(*args)
+    finally:
+        sys.setprofile(None)
+    return result, lichylnyk[0]
+
+
 def print_dp_table(length: int, prices: List[int]) -> None:
-    stats: Dict = {}
-    rod_cutting_table(length, prices, stats=stats)
-    best, first = stats["best"], stats["first"]
+    _, locs = trace_locals(rod_cutting_table, ("best", "first"), length, prices)
+    best, first = locs["best"], locs["first"]
     print("\n1. Таблиця табуляції")
     print(f"Довжина стрижня: {length}, ціни: {prices}")
     print(f"{'n':>2}  {'кандидати (i: прибуток)':<34}{'best[n]':>8}{'first[n]':>9}")
@@ -178,13 +206,14 @@ def print_dp_table(length: int, prices: List[int]) -> None:
 
 
 def print_calls(length: int, prices: List[int]) -> None:
-    naive, memo = {"calls": 0}, {"calls": 0}
-    p_naive = rod_cutting_naive(length, prices, naive)
-    p_memo = rod_cutting_memo(length, prices, stats=memo)["max_profit"]
+    p_naive, n_naive = count_calls(rod_cutting_naive, "rod_cutting_naive",
+                                   length, prices)
+    result, n_memo = count_calls(rod_cutting_memo, "solve", length, prices)
+    p_memo = result["max_profit"]
     print(f"\n2. Кількість викликів рекурсії, довжина стрижня {length}")
-    print(f"Без запам'ятовування: прибуток {p_naive}, викликів {naive['calls']}")
-    print(f"З мемоізацією:        прибуток {p_memo}, викликів {memo['calls']}")
-    print(f"Викликів менше у {naive['calls'] / memo['calls']:.0f} разів")
+    print(f"Без запам'ятовування: прибуток {p_naive}, викликів {n_naive}")
+    print(f"З мемоізацією:        прибуток {p_memo}, викликів {n_memo}")
+    print(f"Викликів менше у {n_naive / n_memo:.0f} разів")
 
 
 def print_errors() -> None:
