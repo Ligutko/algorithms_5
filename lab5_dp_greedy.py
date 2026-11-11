@@ -133,8 +133,11 @@ def run_tests() -> None:
         {"length": 5, "prices": [2, 5, 7, 8, 10], "name": "Базовий випадок"},
         {"length": 3, "prices": [1, 3, 8], "name": "Оптимально не різати"},
         {"length": 4, "prices": [3, 5, 6, 7], "name": "Рівномірні розрізи"},
-        {"length": 2, "prices": [1, 3], "name": "Мінімальний стрижень"},
-        {"length": 10, "prices": [1, 5, 8, 9, 10, 17, 17, 20, 24, 30],
+        {"length": 6, "prices": [10, 12, 13, 14, 15, 16],
+         "name": "Дрібні відрізки вигідні, але заборонені"},
+        {"length": 7, "prices": [1, 5, 8, 9, 10, 17, 17],
+         "name": "Непарна довжина без відрізка 1"},
+        {"length": 11, "prices": [4, 7, 8, 15, 20, 21, 27, 28, 29, 31, 32],
          "name": "Довгий стрижень"},
     ]
     print("=" * 60)
@@ -231,7 +234,7 @@ def print_errors() -> None:
 
 
 def print_rod_extra() -> None:
-    print_dp_table(5, [2, 5, 7, 8, 10])
+    print_dp_table(7, [1, 5, 8, 9, 10, 17, 17])
     print_calls(22, [p * 3 for p in range(1, 23)])
     print_errors()
 
@@ -307,31 +310,41 @@ def optimize_printing(print_jobs: List[Dict], constraints: Dict,
 
 
 CONSTRAINTS = {"max_volume": 300, "max_items": 2}
+CONSTRAINTS_3 = {"max_volume": 300, "max_items": 3}
 
+# (назва, завдання, обмеження принтера)
 TEST_JOBS = [
     ("Тест 1 (однаковий пріоритет)", [
         {"id": "M1", "volume": 100, "priority": 1, "print_time": 120},
         {"id": "M2", "volume": 150, "priority": 1, "print_time": 90},
-        {"id": "M3", "volume": 120, "priority": 1, "print_time": 150}]),
+        {"id": "M3", "volume": 120, "priority": 1, "print_time": 150}],
+     CONSTRAINTS),
     ("Тест 2 (різні пріоритети)", [
         {"id": "M1", "volume": 100, "priority": 2, "print_time": 120},
         {"id": "M2", "volume": 150, "priority": 1, "print_time": 90},
-        {"id": "M3", "volume": 120, "priority": 3, "print_time": 150}]),
+        {"id": "M3", "volume": 120, "priority": 3, "print_time": 150}],
+     CONSTRAINTS),
     ("Тест 3 (перевищення обмежень)", [
         {"id": "M1", "volume": 250, "priority": 1, "print_time": 180},
         {"id": "M2", "volume": 200, "priority": 1, "print_time": 150},
-        {"id": "M3", "volume": 180, "priority": 2, "print_time": 120}]),
-    ("Тест 4 (п'ять моделей)", [
-        {"id": "A1", "volume": 80, "priority": 1, "print_time": 100},
-        {"id": "A2", "volume": 120, "priority": 1, "print_time": 60},
-        {"id": "A3", "volume": 90, "priority": 2, "print_time": 150},
-        {"id": "A4", "volume": 60, "priority": 3, "print_time": 40},
-        {"id": "A5", "volume": 200, "priority": 2, "print_time": 80}]),
+        {"id": "M3", "volume": 180, "priority": 2, "print_time": 120}],
+     CONSTRAINTS),
+    ("Тест 4 (сім моделей, до 3 в партії)", [
+        {"id": "K1", "volume": 90, "priority": 1, "print_time": 60},
+        {"id": "K2", "volume": 110, "priority": 1, "print_time": 120},
+        {"id": "K3", "volume": 70, "priority": 1, "print_time": 90},
+        {"id": "L1", "volume": 140, "priority": 2, "print_time": 80},
+        {"id": "L2", "volume": 100, "priority": 2, "print_time": 50},
+        {"id": "P1", "volume": 60, "priority": 3, "print_time": 40},
+        {"id": "P2", "volume": 230, "priority": 3, "print_time": 100}],
+     CONSTRAINTS_3),
 ]
 
 
-def print_printing(name: str, result: Dict) -> None:
+def print_printing(name: str, result: Dict, limits: Dict) -> None:
     print(name + ":")
+    print(f"Обмеження: {limits['max_volume']} см³, "
+          f"не більше {limits['max_items']} моделей")
     print(f"Порядок друку: {result['print_order']}")
     for k, b in enumerate(result["batches"], start=1):
         print(f"Партія {k}: {b['jobs']}, {b['time']} хв")
@@ -342,15 +355,14 @@ def test_printing_optimization() -> None:
     print("=" * 60)
     print("ЗАВДАННЯ 2. Оптимізація черги 3D-принтера (жадібний алгоритм)")
     print("=" * 60)
-    print(f"Обмеження принтера: {CONSTRAINTS}\n")
-    for i, (name, jobs) in enumerate(TEST_JOBS):
+    for i, (name, jobs, limits) in enumerate(TEST_JOBS):
         if i:
             print()
-        print_printing(name, optimize_printing(jobs, CONSTRAINTS))
+        print_printing(name, optimize_printing(jobs, limits), limits)
     print("\nПорівняння з базовим правилом (час партії = максимум):")
-    for name, jobs in TEST_JOBS:
-        base = optimize_printing(jobs, CONSTRAINTS, time_rule=max)["total_time"]
-        var = optimize_printing(jobs, CONSTRAINTS)["total_time"]
+    for name, jobs, limits in TEST_JOBS:
+        base = optimize_printing(jobs, limits, time_rule=max)["total_time"]
+        var = optimize_printing(jobs, limits)["total_time"]
         print(f"{name.split(' (')[0]}: базове {base} хв, варіант 2 {var} хв")
     print("\nНекоректні вхідні дані:")
     bad = [("модель більша за принтер", [{"id": "X", "volume": 400,
@@ -368,7 +380,7 @@ def test_printing_optimization() -> None:
 
 # ───────────────────────────── Перевірка ─────────────────────────────
 
-# Результати методички для базового правила (мінімальна довжина відрізка 1,
+# Очікувані результати базового правила (мінімальна довжина відрізка 1,
 # час партії - максимум): прибуток, розрізи, кількість розрізів.
 ROD_BASE = [(5, [2, 5, 7, 8, 10], 12, [2, 2, 1], 2),
             (3, [1, 3, 8], 8, [3], 0),
@@ -413,7 +425,7 @@ def print_check() -> None:
     print("ПЕРЕВІРКА")
     print("=" * 60)
 
-    print("\n1. Базові результати методички відтворено")
+    print("\n1. Базові результати завдання відтворено")
     for length, prices, profit, cuts, n_cuts in ROD_BASE:
         for fn in (rod_cutting_memo, rod_cutting_table):
             r = fn(length, prices, min_piece=1)
@@ -421,7 +433,7 @@ def print_check() -> None:
                 (profit, cuts, n_cuts), (fn.__name__, length)
         print(f"стрижень {length}: прибуток {profit}, розрізи {cuts}, "
               f"розрізів {n_cuts} (memo і table)")
-    for (name, jobs), (total, order) in zip(TEST_JOBS, PRINT_BASE):
+    for (name, jobs, _), (total, order) in zip(TEST_JOBS, PRINT_BASE):
         r = optimize_printing(jobs, CONSTRAINTS, time_rule=max)
         assert (r["total_time"], r["print_order"]) == (total, order), name
         print(f"{name.split(' (')[0]}: {total} хв, порядок {order}")
